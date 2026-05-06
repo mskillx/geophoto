@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer } from 'react-leaflet'
+import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import PhotoMarker from './PhotoMarker'
 
@@ -10,7 +10,12 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-export default function MapView({ photos, onMarkerClick }) {
+function MapClickHandler({ onClick }) {
+  useMapEvents({ click: (e) => onClick(e.latlng.lat, e.latlng.lng) })
+  return null
+}
+
+export default function MapView({ photos, onMarkerClick, onMapClick }) {
   return (
     <MapContainer
       center={[20, 10]}
@@ -23,6 +28,7 @@ export default function MapView({ photos, onMarkerClick }) {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      {onMapClick && <MapClickHandler onClick={onMapClick} />}
       {photos.map((photo) => (
         <PhotoMarker key={photo.id} photo={photo} onClick={onMarkerClick} />
       ))}

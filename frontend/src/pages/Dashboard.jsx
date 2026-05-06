@@ -3,9 +3,8 @@ import Navbar from '../components/UI/Navbar'
 import MapView from '../components/Map/MapView'
 import UploadZone from '../components/Upload/UploadZone'
 import Modal from '../components/UI/Modal'
-import LocationPicker from '../components/Upload/LocationPicker'
 import api from '../services/api'
-import { MapPin, Calendar, HardDrive, Trash2, Navigation } from 'lucide-react'
+import { MapPin, Calendar, HardDrive, Trash2, Navigation, X } from 'lucide-react'
 
 export default function Dashboard() {
   const [photos, setPhotos] = useState([])
@@ -13,6 +12,7 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [locationPickerPhoto, setLocationPickerPhoto] = useState(null)
+  const [pendingLocation, setPendingLocation] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(null)
   const [uploadError, setUploadError] = useState('')
   const [page, setPage] = useState(1)
@@ -72,6 +72,15 @@ export default function Dashboard() {
       if (selectedPhoto?.id === photoId) setSelectedPhoto(res.data)
     } finally {
       setLocationPickerPhoto(null)
+      setPendingLocation(null)
+    }
+  }
+
+  const handleMapClick = (lat, lng) => {
+    if (locationPickerPhoto) {
+      handleLocationSet(locationPickerPhoto.id, lat, lng)
+    } else if (noGpsPhotos.length > 0) {
+      setPendingLocation({ lat, lng })
     }
   }
 
@@ -88,6 +97,7 @@ export default function Dashboard() {
   }
 
   const mappablePhotos = photos.filter((p) => p.latitude !== null && p.longitude !== null)
+  const noGpsPhotos = photos.filter((p) => p.latitude === null)
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 overflow-hidden">
@@ -96,14 +106,38 @@ export default function Dashboard() {
       <div className="flex flex-1 overflow-hidden">
         {/* Map — fills remaining space */}
         <div className="flex-1 relative">
-          {mappablePhotos.length === 0 && !loading && (
+          {mappablePhotos.length === 0 && !loading && !locationPickerPhoto && (
             <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
               <p className="bg-slate-800/80 text-slate-400 text-sm px-4 py-2 rounded-lg border border-slate-700">
-                Upload photos with GPS data to see them on the map
+                {noGpsPhotos.length > 0
+                  ? 'Click anywhere on the map to place a photo'
+                  : 'Upload photos with GPS data to see them on the map'}
               </p>
             </div>
           )}
-          <MapView photos={mappablePhotos} onMarkerClick={setSelectedPhoto} />
+
+          {/* Selection mode banner */}
+          {locationPickerPhoto && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[999] flex items-center gap-3 bg-slate-800/95 border border-blue-500/60 rounded-xl px-4 py-2.5 shadow-xl">
+              <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+              <span className="text-sm text-white">
+                Click to place:{' '}
+                <span className="text-blue-300 font-medium">{locationPickerPhoto.original_filename}</span>
+              </span>
+              <button
+                onClick={() => setLocationPickerPhoto(null)}
+                className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <MapView
+            photos={mappablePhotos}
+            onMarkerClick={locationPickerPhoto ? null : setSelectedPhoto}
+            onMapClick={handleMapClick}
+          />
         </div>
 
         {/* Sidebar */}
@@ -241,13 +275,36 @@ export default function Dashboard() {
         </Modal>
       )}
 
-      {/* Location picker modal */}
-      {locationPickerPhoto && (
-        <LocationPicker
-          photo={locationPickerPhoto}
-          onConfirm={(lat, lng) => handleLocationSet(locationPickerPhoto.id, lat, lng)}
-          onClose={() => setLocationPickerPhoto(null)}
-        />
+      {/* Place-photo modal: triggered by clicking empty map area */}
+      {pendingLocation && (
+        <Modal onClose={() => setPendingLocation(null)}>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin className="w-5 h-5 text-blue-400" />
+              <h3 className="font-semibold text-white text-lg">Place Photo</h3>
+            </div>
+            <p className="text-slate-400 text-sm mb-4">
+              {pendingLocation.lat.toFixed(5)}, {pendingLocation.lng.toFixed(5)} — select a photo to place here
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {noGpsPhotos.map((photo) => (
+                <button
+                  key={photo.id}
+                  onClick={() => handleLocationSet(photo.id, pendingLocation.lat, pendingLocation.lng)}
+                  className="aspect-square rounded-lg overflow-hidden bg-slate-700 hover:ring-2 hover:ring-blue-500 transition-all relative group"
+                  title={photo.original_filename}
+                >
+                  <img
+                    src={`/api/photos/${photo.id}/thumbnail`}
+                    alt={photo.original_filename}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )
